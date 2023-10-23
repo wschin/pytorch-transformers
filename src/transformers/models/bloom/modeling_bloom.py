@@ -684,17 +684,17 @@ class BloomModel(BloomPreTrainedModel):
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
-        **deprecated_arguments,
+        #**deprecated_arguments,
     ) -> Union[Tuple[torch.Tensor, ...], BaseModelOutputWithPastAndCrossAttentions]:
-        if deprecated_arguments.pop("position_ids", False) is not False:
-            # `position_ids` could have been `torch.Tensor` or `None` so defaulting pop to `False` allows to detect if users were passing explicitly `None`
-            warnings.warn(
-                "`position_ids` have no functionality in BLOOM and will be removed in v5.0.0. You can safely ignore"
-                " passing `position_ids`.",
-                FutureWarning,
-            )
-        if len(deprecated_arguments) > 0:
-            raise ValueError(f"Got unexpected arguments: {deprecated_arguments}")
+        #if deprecated_arguments.pop("position_ids", False) is not False:
+        #    # `position_ids` could have been `torch.Tensor` or `None` so defaulting pop to `False` allows to detect if users were passing explicitly `None`
+        #    warnings.warn(
+        #        "`position_ids` have no functionality in BLOOM and will be removed in v5.0.0. You can safely ignore"
+        #        " passing `position_ids`.",
+        #        FutureWarning,
+        #    )
+        #if len(deprecated_arguments) > 0:
+        #    raise ValueError(f"Got unexpected arguments: {deprecated_arguments}")
 
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (

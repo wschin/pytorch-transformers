@@ -46,7 +46,8 @@ def _make_causal_mask(
     Make causal mask used for bi-directional self-attention.
     """
     bsz, tgt_len = input_ids_shape
-    mask = torch.full((tgt_len, tgt_len), torch.tensor(torch.finfo(dtype).min, device=device), device=device)
+    #mask = torch.full((tgt_len, tgt_len), torch.tensor(torch.finfo(dtype).min, device=device), device=device)
+    mask = torch.full((tgt_len, tgt_len), torch.finfo(dtype).min, device=device)
     mask_cond = torch.arange(mask.size(-1), device=device)
     mask.masked_fill_(mask_cond < (mask_cond + 1).view(mask.size(-1), 1), 0)
     mask = mask.to(dtype)
@@ -96,28 +97,38 @@ class LlamaRotaryEmbedding(torch.nn.Module):
 
         # Build here to make `torch.jit.trace` work.
         self.max_seq_len_cached = max_position_embeddings
-        t = torch.arange(self.max_seq_len_cached, device=self.inv_freq.device, dtype=self.inv_freq.dtype)
-        freqs = torch.einsum("i,j->ij", t, self.inv_freq)
-        # Different from paper, but it uses a different permutation in order to obtain the same calculation
-        emb = torch.cat((freqs, freqs), dim=-1)
-        dtype = torch.get_default_dtype()
-        self.register_buffer("cos_cached", emb.cos()[None, None, :, :].to(dtype), persistent=False)
-        self.register_buffer("sin_cached", emb.sin()[None, None, :, :].to(dtype), persistent=False)
+        #t = torch.arange(self.max_seq_len_cached, device=self.inv_freq.device, dtype=self.inv_freq.dtype)
+        #freqs = torch.einsum("i,j->ij", t, self.inv_freq)
+        ## Different from paper, but it uses a different permutation in order to obtain the same calculation
+        #emb = torch.cat((freqs, freqs), dim=-1)
+        #dtype = torch.get_default_dtype()
+        #self.register_buffer("cos_cached", emb.cos()[None, None, :, :].to(dtype), persistent=False)
+        #self.register_buffer("sin_cached", emb.sin()[None, None, :, :].to(dtype), persistent=False)
 
     def forward(self, x, seq_len=None):
         # x: [bs, num_attention_heads, seq_len, head_size]
         # This `if` block is unlikely to be run after we build sin/cos in `__init__`. Keep the logic here just in case.
-        if seq_len > self.max_seq_len_cached:
-            self.max_seq_len_cached = seq_len
-            t = torch.arange(self.max_seq_len_cached, device=x.device, dtype=self.inv_freq.dtype)
-            freqs = torch.einsum("i,j->ij", t, self.inv_freq)
-            # Different from paper, but it uses a different permutation in order to obtain the same calculation
-            emb = torch.cat((freqs, freqs), dim=-1).to(x.device)
-            self.register_buffer("cos_cached", emb.cos()[None, None, :, :].to(x.dtype), persistent=False)
-            self.register_buffer("sin_cached", emb.sin()[None, None, :, :].to(x.dtype), persistent=False)
+        #if seq_len > self.max_seq_len_cached:
+        #    self.max_seq_len_cached = seq_len
+        #    t = torch.arange(self.max_seq_len_cached, device=x.device, dtype=self.inv_freq.dtype)
+        #    freqs = torch.einsum("i,j->ij", t, self.inv_freq)
+        #    # Different from paper, but it uses a different permutation in order to obtain the same calculation
+        #    emb = torch.cat((freqs, freqs), dim=-1).to(x.device)
+        #    self.register_buffer("cos_cached", emb.cos()[None, None, :, :].to(x.dtype), persistent=False)
+        #    self.register_buffer("sin_cached", emb.sin()[None, None, :, :].to(x.dtype), persistent=False)
+        #return (
+        #    self.cos_cached[:, :, :seq_len, ...].to(dtype=x.dtype),
+        #    self.sin_cached[:, :, :seq_len, ...].to(dtype=x.dtype),
+        #)
+        t = torch.arange(self.max_seq_len_cached, device=x.device, dtype=self.inv_freq.dtype)
+        freqs = torch.einsum("i,j->ij", t, self.inv_freq)
+        # Different from paper, but it uses a different permutation in order to obtain the same calculation
+        emb = torch.cat((freqs, freqs), dim=-1).to(x.device)
+        cos_cached = emb.cos()[None, None, :, :].to(x.dtype)
+        sin_cached = emb.sin()[None, None, :, :].to(x.dtype)
         return (
-            self.cos_cached[:, :, :seq_len, ...].to(dtype=x.dtype),
-            self.sin_cached[:, :, :seq_len, ...].to(dtype=x.dtype),
+            cos_cached[:, :, :seq_len, ...],
+            sin_cached[:, :, :seq_len, ...],
         )
 
 
@@ -224,10 +235,14 @@ class LlamaAttention(nn.Module):
                     f"Attention mask should be of size {(bsz, 1, q_len, kv_seq_len)}, but is {attention_mask.size()}"
                 )
             attn_weights = attn_weights + attention_mask
-            dtype_min = torch.tensor(
-                torch.finfo(attn_weights.dtype).min, device=attn_weights.device, dtype=attn_weights.dtype
+            #dtype_min = torch.tensor(
+            #    torch.finfo(attn_weights.dtype).min, device=attn_weights.device, dtype=attn_weights.dtype
+            #)
+            #attn_weights = torch.max(attn_weights, dtype_min)
+
+            attn_weights = torch.clamp(
+                attn_weights, min=torch.finfo(attn_weights.dtype).min
             )
-            attn_weights = torch.max(attn_weights, dtype_min)
 
         # upcast attention to fp32
         attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32).to(query_states.dtype)
